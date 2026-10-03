@@ -1,15 +1,125 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/AppShell";
-import { migratedProjects } from "@/data/migrated-projects";
 import { createClient } from "@/lib/supabase/client";
 import { projectIcon, projectProgress, type ProjectSummary } from "@/lib/project";
 
+type ImportPriority = "low" | "medium" | "high";
+type ImportStatus = "pending" | "in_progress" | "done";
+
+type ImportTask = {
+  title: string;
+  description?: string | null;
+  priority: ImportPriority;
+  status: ImportStatus;
+  due_date?: string | null;
+};
+
+type OrganizerProjectFile = {
+  format: "organizador-project";
+  version: 1;
+  project: {
+    name: string;
+    description?: string | null;
+    tasks: ImportTask[];
+  };
+};
+
+const priorityLabels: Record<ImportPriority, string> = {
+  low: "Baixa",
+  medium: "Média",
+  high: "Alta",
+};
+
+const statusLabels: Record<ImportStatus, string> = {
+  pending: "Pendente",
+  in_progress: "Em andamento",
+  done: "Concluída",
+};
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+function parseOrganizerProjectFile(raw: unknown): OrganizerProjectFile {
+  if (!isPlainObject(raw)) throw new Error("O arquivo precisa conter um objeto JSON.");
+  if (raw.format !== "organizador-project") throw new Error('O campo "format" precisa ser "organizador-project".');
+  if (raw.version !== 1) throw new Error("Esta versão do Organizador aceita arquivos version: 1.");
+  if (!isPlainObject(raw.project)) throw new Error('O campo "project" é obrigatório.');
+
+  const projectName = typeof raw.project.name === "string" ? raw.project.name.trim() : "";
+  if (!projectName) throw new Error("O projeto precisa ter um nome.");
+  if (projectName.length > 200) throw new Error("O nome do projeto é muito longo.");
+
+  const projectDescription = raw.project.description;
+  if (projectDescription != null && typeof projectDescription !== "string") {
+    throw new Error("A descrição do projeto precisa ser texto.");
+  }
+
+  if (!Array.isArray(raw.project.tasks)) throw new Error('O campo "tasks" precisa ser uma lista.');
+  if (raw.project.tasks.length > 500) throw new Error("Um arquivo pode importar no máximo 500 tarefas.");
+
+  const tasks = raw.project.tasks.map((item, index): ImportTask => {
+    if (!isPlainObject(item)) throw new Error(`A tarefa ${index + 1} é inválida.`);
+
+    const title = typeof item.title === "string" ? item.title.trim() : "";
+    if (!title) throw new Error(`A tarefa ${index + 1} precisa ter um título.`);
+    if (title.length > 300) throw new Error(`O título da tarefa ${index + 1} é muito longo.`);
+
+    if (item.description != null && typeof item.description !== "string") {
+      throw new Error(`A descrição da tarefa ${index + 1} precisa ser texto.`);
+    }
+
+    const priority = item.priority ?? "medium";
+    if (priority !== "low" && priority !== "medium" && priority !== "high") {
+      throw new Error(`A prioridade da tarefa ${index + 1} precisa ser low, medium ou high.`);
+    }
+
+    const status = item.status ?? "pending";
+    if (status !== "pending" && status !== "in_progress" && status !== "done") {
+      throw new Error(`O status da tarefa ${index + 1} precisa ser pending, in_progress ou done.`);
+    }
+
+    let dueDate: string | null = null;
+    if (item.due_date != null) {
+      if (typeof item.due_date !== "string" || !isIsoDate(item.due_date)) {
+        throw new Error(`O prazo da tarefa ${index + 1} precisa usar o formato AAAA-MM-DD.`);
+      }
+      dueDate = item.due_date;
+    }
+
+    return {
+      title,
+      description: typeof item.description === "string" ? item.description.trim() || null : null,
+      priority,
+      status,
+      due_date: dueDate,
+    };
+  });
+
+  return {
+    format: "organizador-project",
+    version: 1,
+    project: {
+      name: projectName,
+      description: typeof projectDescription === "string" ? projectDescription.trim() || null : null,
+      tasks,
+    },
+  };
+}
+
 export default function ProjectsPage() {
   const supabase = useMemo(() => createClient(), []);
-  const [userId, setUserId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [name, setName] = useState("");
@@ -18,6 +128,8 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState<OrganizerProjectFile | null>(null);
+  const [importFileName, setImportFileName] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -48,7 +160,6 @@ export default function ProjectsPage() {
         window.location.href = "/login";
         return;
       }
-      setUserId(authData.user.id);
 
       const { data: workspaceData, error: workspaceError } = await supabase.rpc("get_my_workspace_id");
       if (workspaceError) {
@@ -100,57 +211,54 @@ export default function ProjectsPage() {
     await loadProjects(workspaceId);
   }
 
-  async function importMigratedProjects() {
-    if (!supabase || !workspaceId || !userId) return;
+  async function chooseImportFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setError("");
+    setNotice("");
+
+    if (file.size > 1024 * 1024) {
+      setError("O arquivo é maior que 1 MB.");
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(await file.text()) as unknown;
+      const normalized = parseOrganizerProjectFile(parsed);
+      setImportFileName(file.name);
+      setImportPreview(normalized);
+    } catch (fileError) {
+      const message = fileError instanceof Error ? fileError.message : "Arquivo inválido.";
+      setError(`Não foi possível abrir o projeto: ${message}`);
+      setImportPreview(null);
+      setImportFileName("");
+    }
+  }
+
+  async function importProjectFile() {
+    if (!supabase || !workspaceId || !importPreview) return;
     setImporting(true);
     setError("");
     setNotice("");
 
-    const existing = new Set(projects.map((project) => project.name.trim().toLowerCase()));
-    let importedCount = 0;
-    let taskCount = 0;
-
-    for (const seed of migratedProjects) {
-      if (existing.has(seed.name.toLowerCase())) continue;
-
-      const { data: project, error: projectError } = await supabase
-        .from("projects")
-        .insert({ workspace_id: workspaceId, name: seed.name, description: `${seed.description}\n\nOrigem da migração: ${seed.source}` })
-        .select("id")
-        .single();
-
-      if (projectError || !project) {
-        setError(`A importação parou em “${seed.name}”: ${projectError?.message ?? "projeto não retornado"}`);
-        setImporting(false);
-        await loadProjects(workspaceId);
-        return;
-      }
-
-      if (seed.tasks.length) {
-        const rows = seed.tasks.map((task) => ({
-          workspace_id: workspaceId,
-          project_id: project.id,
-          title: task.title,
-          description: task.description ?? null,
-          priority: task.priority ?? "medium",
-          status: "pending",
-          created_by: userId,
-        }));
-        const { error: taskError } = await supabase.from("tasks").insert(rows);
-        if (taskError) {
-          setError(`O projeto “${seed.name}” foi criado, mas suas tarefas falharam: ${taskError.message}`);
-          setImporting(false);
-          await loadProjects(workspaceId);
-          return;
-        }
-        taskCount += rows.length;
-      }
-      importedCount += 1;
-      existing.add(seed.name.toLowerCase());
-    }
+    const { data, error: importError } = await supabase.rpc("import_organizer_project", {
+      p_payload: importPreview,
+    });
 
     setImporting(false);
-    setNotice(importedCount ? `${importedCount} projetos e ${taskCount} tarefas foram importados.` : "Todos os projetos migrados já existem neste workspace.");
+    if (importError) {
+      setError(`Não foi possível importar o projeto: ${importError.message}`);
+      return;
+    }
+
+    const result = data as { project_id?: string; tasks_imported?: number } | null;
+    const taskCount = result?.tasks_imported ?? importPreview.project.tasks.length;
+    const importedName = importPreview.project.name;
+    setImportPreview(null);
+    setImportFileName("");
+    setNotice(`Projeto “${importedName}” importado com ${taskCount} tarefa(s).`);
     await loadProjects(workspaceId);
   }
 
@@ -169,8 +277,19 @@ export default function ProjectsPage() {
           <p className="muted">Cada cartão usa as tarefas reais para calcular o progresso automaticamente.</p>
         </div>
         <div className="top-actions">
-          <button className="button secondary" disabled={importing || !workspaceId} onClick={() => void importMigratedProjects()}>
-            {importing ? "Importando..." : "Importar migração"}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            hidden
+            onChange={(event) => void chooseImportFile(event)}
+          />
+          <button
+            className="button secondary"
+            disabled={importing || !workspaceId}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Importar projeto
           </button>
         </div>
       </header>
@@ -224,7 +343,75 @@ export default function ProjectsPage() {
           })}
         </div>
       ) : (
-        <div className="panel compact-empty"><b>Nenhum projeto encontrado.</b><span>Crie um projeto acima ou importe o pacote de migração.</span></div>
+        <div className="panel compact-empty"><b>Nenhum projeto encontrado.</b><span>Crie um projeto acima ou importe um arquivo .organizador.json.</span></div>
+      )}
+
+      {importPreview && (
+        <div
+          className="editor-overlay"
+          onMouseDown={() => {
+            if (!importing) {
+              setImportPreview(null);
+              setImportFileName("");
+            }
+          }}
+        >
+          <div className="editor-card" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">IMPORTAR PROJETO</p>
+                <h2>{importPreview.project.name}</h2>
+                <p className="muted">{importFileName || "Arquivo de projeto"}</p>
+              </div>
+            </div>
+
+            <div style={{ padding: "0 20px 20px", display: "grid", gap: 16 }}>
+              <div>
+                <strong>{importPreview.project.tasks.length} tarefa(s) serão criadas</strong>
+                <p className="muted" style={{ marginTop: 6 }}>
+                  {importPreview.project.description || "Projeto sem descrição."}
+                </p>
+              </div>
+
+              <div style={{ display: "grid", gap: 8 }}>
+                {importPreview.project.tasks.slice(0, 12).map((task, index) => (
+                  <div
+                    key={`${task.title}-${index}`}
+                    style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", display: "grid", gap: 4 }}
+                  >
+                    <strong>{task.title}</strong>
+                    <small className="muted">
+                      {priorityLabels[task.priority]} · {statusLabels[task.status]}
+                      {task.due_date ? ` · prazo ${task.due_date}` : ""}
+                    </small>
+                  </div>
+                ))}
+                {importPreview.project.tasks.length > 12 && (
+                  <p className="muted">+ {importPreview.project.tasks.length - 12} tarefa(s) não exibidas na prévia.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="editor-actions">
+              <button
+                type="button"
+                className="button secondary"
+                disabled={importing}
+                onClick={() => {
+                  setImportPreview(null);
+                  setImportFileName("");
+                }}
+              >
+                Cancelar
+              </button>
+              <div className="editor-actions-right">
+                <button type="button" className="button primary" disabled={importing} onClick={() => void importProjectFile()}>
+                  {importing ? "Importando..." : "Importar projeto"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </AppShell>
   );
