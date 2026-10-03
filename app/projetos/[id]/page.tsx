@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import { createClient } from "@/lib/supabase/client";
 import { formatDate, priorityLabel, projectProgress, statusLabel, type ProjectTask, type TaskPriority, type TaskStatus } from "@/lib/project";
@@ -46,6 +46,7 @@ function minutesToTime(value: number) {
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const projectId = Array.isArray(params.id) ? params.id[0] : params.id;
   const supabase = useMemo(() => createClient(), []);
   const [userId, setUserId] = useState<string | null>(null);
@@ -67,6 +68,9 @@ export default function ProjectDetailPage() {
   const [taskDueDate, setTaskDueDate] = useState("");
   const [taskAssignee, setTaskAssignee] = useState("");
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
+  const [showDeleteProject, setShowDeleteProject] = useState(false);
+  const [deleteProjectName, setDeleteProjectName] = useState("");
+  const [deletingProject, setDeletingProject] = useState(false);
 
   const loadProject = useCallback(async (workspace: string) => {
     if (!supabase || !projectId) return;
@@ -246,6 +250,37 @@ export default function ProjectDetailPage() {
     else if (workspaceId) await loadProject(workspaceId);
   }
 
+  async function deleteProject() {
+    if (!supabase || !project) return;
+
+    // Proteção no frontend
+    if (deleteProjectName !== project.name) {
+      setError("Digite exatamente o nome do projeto para confirmar.");
+      return;
+    }
+
+    setDeletingProject(true);
+    setError("");
+    setNotice("");
+
+    const { error: deleteError } = await supabase.rpc(
+      "delete_project_with_tasks",
+      {
+        p_project_id: project.id,
+        p_project_name: deleteProjectName,
+      }
+    );
+
+    if (deleteError) {
+      setDeletingProject(false);
+      setError(`Não foi possível excluir o projeto: ${deleteError.message}`);
+      return;
+    }
+
+    router.push("/projetos");
+    router.refresh();
+  }
+
   const memberName = (id: string | null) => members.find((member) => member.id === id)?.display_name ?? "Sem responsável";
   const progress = projectProgress(tasks);
   const doneCount = tasks.filter((task) => task.status === "done").length;
@@ -370,6 +405,19 @@ export default function ProjectDetailPage() {
               <label>Descrição<textarea rows={7} value={editDescription} onChange={(event) => setEditDescription(event.target.value)} /></label>
               <button className="button secondary" disabled={saving}>{saving ? "Salvando..." : "Salvar detalhes"}</button>
             </form>
+              <div style={{ padding: "0 20px 20px" }}>
+                <button
+                  type="button"
+                  className="button ghost"
+                  onClick={() => {
+                    setDeleteProjectName("");
+                    setShowDeleteProject(true);
+                    setError("");
+                  }}
+                >
+                  Excluir projeto
+                </button>
+              </div>
           </section>
         </aside>
       </div>
@@ -386,6 +434,83 @@ export default function ProjectDetailPage() {
               <div className="editor-actions-right"><button type="button" className="button ghost" onClick={() => setEditingTask(null)}>Cancelar</button><button className="button primary" disabled={saving}>{saving ? "Salvando..." : "Salvar tarefa"}</button></div>
             </div>
           </form>
+        </div>
+      )}
+      {showDeleteProject && (
+        <div
+          className="editor-overlay"
+          onMouseDown={() => {
+            if (!deletingProject) {
+              setShowDeleteProject(false);
+              setDeleteProjectName("");
+            }
+          }}
+        >
+          <div
+            className="editor-card"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">EXCLUIR PROJETO</p>
+                <h2>Esta ação é permanente</h2>
+              </div>
+            </div>
+
+            <div className="project-settings-form">
+              <p className="muted">
+                O projeto <strong>{project.name}</strong> e todas as suas tarefas
+                serão excluídos permanentemente.
+              </p>
+
+              <p className="muted">
+                Para confirmar, digite exatamente:
+              </p>
+
+              <strong>{project.name}</strong>
+
+              <label>
+                Nome do projeto
+                <input
+                  value={deleteProjectName}
+                  onChange={(event) => setDeleteProjectName(event.target.value)}
+                  placeholder={project.name}
+                  autoComplete="off"
+                  autoFocus
+                />
+              </label>
+            </div>
+
+            <div className="editor-actions">
+              <button
+                type="button"
+                className="button secondary"
+                disabled={deletingProject}
+                onClick={() => {
+                  setShowDeleteProject(false);
+                  setDeleteProjectName("");
+                }}
+              >
+                Cancelar
+              </button>
+
+              <div className="editor-actions-right">
+                <button
+                  type="button"
+                  className="button ghost"
+                  disabled={
+                    deletingProject ||
+                    deleteProjectName !== project.name
+                  }
+                  onClick={() => void deleteProject()}
+                >
+                  {deletingProject
+                    ? "Excluindo..."
+                    : "Excluir projeto e tarefas"}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </AppShell>

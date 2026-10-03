@@ -501,3 +501,60 @@ drop trigger if exists comments_validate_workspace_links on public.comments;
 create trigger comments_validate_workspace_links
 before insert or update on public.comments
 for each row execute function public.validate_comment_workspace_links();
+
+create or replace function public.delete_project_with_tasks(
+  p_project_id uuid,
+  p_project_name text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_project public.projects%rowtype;
+begin
+  -- Precisa estar autenticado
+  if auth.uid() is null then
+    raise exception 'Usuário não autenticado';
+  end if;
+
+  -- Localiza o projeto
+  select *
+  into target_project
+  from public.projects
+  where id = p_project_id;
+
+  if not found then
+    raise exception 'Projeto não encontrado';
+  end if;
+
+  -- Confirma que o usuário pertence ao workspace
+  if not public.is_workspace_member(target_project.workspace_id) then
+    raise exception 'Você não tem permissão para excluir este projeto';
+  end if;
+
+  -- Segunda confirmação: nome precisa ser exatamente igual
+  if p_project_name is distinct from target_project.name then
+    raise exception 'O nome do projeto não confere';
+  end if;
+
+  -- Exclui todas as tarefas do projeto
+  delete from public.tasks
+  where project_id = p_project_id
+    and workspace_id = target_project.workspace_id;
+
+  -- Exclui o projeto
+  delete from public.projects
+  where id = p_project_id
+    and workspace_id = target_project.workspace_id;
+end;
+$$;
+
+revoke all
+on function public.delete_project_with_tasks(uuid, text)
+from public;
+
+grant execute
+on function public.delete_project_with_tasks(uuid, text)
+to authenticated;
