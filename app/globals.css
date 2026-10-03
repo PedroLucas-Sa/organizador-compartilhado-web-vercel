@@ -291,3 +291,17 @@ textarea { font: inherit; }
 }
 .task-card-actions { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
 @media (max-width: 560px) { .task-card-heading { flex-direction: column; } .task-card-actions { width: 100%; justify-content: flex-end; } }
+
+
+/* Exclusão protegida de projetos */
+.danger-zone { margin: 18px 20px 20px; padding: 16px; border: 1px solid #f1b7b7; border-radius: 12px; background: #fff8f8; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.danger-zone b { color: var(--danger); }
+.danger-zone p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.delete-project-card { width: min(560px, 100%); }
+.delete-project-content { padding: 20px; display: grid; gap: 14px; }
+.delete-project-content p { margin: 0; line-height: 1.6; }
+.delete-project-content label { display: grid; gap: 7px; font-size: 12px; font-weight: 700; }
+.delete-project-content input { width: 100%; border: 1px solid #d8dde6; border-radius: 10px; padding: 11px 12px; font: inherit; outline: none; }
+.delete-project-content input:focus { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(205, 44, 44, .08); }
+.delete-project-name { display: block; padding: 11px 12px; border-radius: 9px; background: #f6f7f9; border: 1px solid var(--border); font-weight: 700; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .danger-zone { align-items: stretch; flex-direction: column; } .danger-zone .button { width: 100%; } }

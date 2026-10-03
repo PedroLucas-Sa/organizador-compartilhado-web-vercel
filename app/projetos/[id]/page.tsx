@@ -251,11 +251,10 @@ export default function ProjectDetailPage() {
   }
 
   async function deleteProject() {
-    if (!supabase || !project) return;
+    if (!supabase || !project || deletingProject) return;
 
-    // Proteção no frontend
     if (deleteProjectName !== project.name) {
-      setError("Digite exatamente o nome do projeto para confirmar.");
+      setError("Digite exatamente o nome do projeto para confirmar a exclusão.");
       return;
     }
 
@@ -263,13 +262,10 @@ export default function ProjectDetailPage() {
     setError("");
     setNotice("");
 
-    const { error: deleteError } = await supabase.rpc(
-      "delete_project_with_tasks",
-      {
-        p_project_id: project.id,
-        p_project_name: deleteProjectName,
-      }
-    );
+    const { error: deleteError } = await supabase.rpc("delete_project_with_tasks", {
+      p_project_id: project.id,
+      p_project_name: deleteProjectName,
+    });
 
     if (deleteError) {
       setDeletingProject(false);
@@ -405,19 +401,24 @@ export default function ProjectDetailPage() {
               <label>Descrição<textarea rows={7} value={editDescription} onChange={(event) => setEditDescription(event.target.value)} /></label>
               <button className="button secondary" disabled={saving}>{saving ? "Salvando..." : "Salvar detalhes"}</button>
             </form>
-              <div style={{ padding: "0 20px 20px" }}>
-                <button
-                  type="button"
-                  className="button ghost"
-                  onClick={() => {
-                    setDeleteProjectName("");
-                    setShowDeleteProject(true);
-                    setError("");
-                  }}
-                >
-                  Excluir projeto
-                </button>
+
+            <div className="danger-zone">
+              <div>
+                <b>Zona de perigo</b>
+                <p>Exclui permanentemente este projeto e todas as tarefas vinculadas a ele.</p>
               </div>
+              <button
+                type="button"
+                className="button ghost"
+                onClick={() => {
+                  setDeleteProjectName("");
+                  setError("");
+                  setShowDeleteProject(true);
+                }}
+              >
+                Excluir projeto
+              </button>
+            </div>
           </section>
         </aside>
       </div>
@@ -436,6 +437,7 @@ export default function ProjectDetailPage() {
           </form>
         </div>
       )}
+
       {showDeleteProject && (
         <div
           className="editor-overlay"
@@ -446,29 +448,20 @@ export default function ProjectDetailPage() {
             }
           }}
         >
-          <div
-            className="editor-card"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
+          <div className="editor-card delete-project-card" onMouseDown={(event) => event.stopPropagation()}>
             <div className="panel-header">
               <div>
-                <p className="eyebrow">EXCLUIR PROJETO</p>
+                <p className="eyebrow danger-text">EXCLUIR PROJETO</p>
                 <h2>Esta ação é permanente</h2>
               </div>
             </div>
 
-            <div className="project-settings-form">
-              <p className="muted">
-                O projeto <strong>{project.name}</strong> e todas as suas tarefas
-                serão excluídos permanentemente.
+            <div className="delete-project-content">
+              <p>
+                O projeto <strong>{project.name}</strong> e todas as suas <strong>{tasks.length} tarefa(s)</strong> serão excluídos permanentemente.
               </p>
-
-              <p className="muted">
-                Para confirmar, digite exatamente:
-              </p>
-
-              <strong>{project.name}</strong>
-
+              <p>Para confirmar, digite exatamente o nome abaixo:</p>
+              <code className="delete-project-name">{project.name}</code>
               <label>
                 Nome do projeto
                 <input
@@ -477,8 +470,10 @@ export default function ProjectDetailPage() {
                   placeholder={project.name}
                   autoComplete="off"
                   autoFocus
+                  disabled={deletingProject}
                 />
               </label>
+              <small className="muted">O nome diferencia maiúsculas, minúsculas e espaços.</small>
             </div>
 
             <div className="editor-actions">
@@ -493,20 +488,14 @@ export default function ProjectDetailPage() {
               >
                 Cancelar
               </button>
-
               <div className="editor-actions-right">
                 <button
                   type="button"
                   className="button ghost"
-                  disabled={
-                    deletingProject ||
-                    deleteProjectName !== project.name
-                  }
+                  disabled={deletingProject || deleteProjectName !== project.name}
                   onClick={() => void deleteProject()}
                 >
-                  {deletingProject
-                    ? "Excluindo..."
-                    : "Excluir projeto e tarefas"}
+                  {deletingProject ? "Excluindo..." : "Excluir projeto e tarefas"}
                 </button>
               </div>
             </div>
