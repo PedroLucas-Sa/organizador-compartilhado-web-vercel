@@ -20,6 +20,7 @@ export type ProjectSummary = {
   workspace_id: string;
   name: string;
   description: string | null;
+  icon: string | null;
   created_at: string;
   tasks: Pick<ProjectTask, "id" | "status" | "due_date" | "priority" | "title">[];
 };
@@ -56,7 +57,10 @@ export function isOverdue(task: { due_date: string | null; status: string }, tod
   return task.due_date < localToday;
 }
 
-export function projectIcon(name: string) {
+// Mantém compatibilidade com projetos antigos que ainda não tenham icon salvo.
+export function projectIcon(name: string, icon?: string | null) {
+  if (icon?.trim()) return icon.trim();
+
   const normalized = name.toLowerCase();
   if (normalized.includes("kata") || normalized.startsWith("ia ") || normalized.includes("inteligência artificial")) return "🧠";
   if (normalized.includes("nano") || normalized.includes("quím")) return "🧪";
