@@ -163,6 +163,11 @@ export default function TasksPage() {
                     <option value="in_progress">Em andamento</option>
                     <option value="done">Concluída</option>
                   </select>
+                  {task.status !== "done" && (
+                    <Link className="button secondary compact-button" href={`/horario?task=${task.id}`}>
+                      Adicionar ao horário
+                    </Link>
+                  )}
                   {task.project_id && <Link className="button secondary compact-button" href={`/projetos/${task.project_id}`}>Abrir projeto</Link>}
                 </div>
               </article>
