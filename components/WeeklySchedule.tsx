@@ -55,7 +55,6 @@ export default function WeeklySchedule() {
   const [requestedTask, setRequestedTask] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
-  const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [tasks, setTasks] = useState<TaskOption[]>([]);
   const [blocks, setBlocks] = useState<ScheduleRow[]>([]);
@@ -104,7 +103,7 @@ export default function WeeklySchedule() {
       return;
     }
 
-    const [scheduleResult, memberResult, workspaceResult, taskResult] = await Promise.all([
+    const [scheduleResult, memberResult, taskResult] = await Promise.all([
       supabase
         .from("schedule_blocks")
         .select("id,workspace_id,day_of_week,start_minute,end_minute,title,owner_id,linked_task_id,notes,created_by")
@@ -112,7 +111,6 @@ export default function WeeklySchedule() {
         .order("day_of_week")
         .order("start_minute"),
       supabase.from("workspace_members").select("user_id,role").eq("workspace_id", workspace),
-      supabase.from("workspaces").select("invite_code").eq("id", workspace).maybeSingle(),
       supabase
         .from("tasks")
         .select("id,title,project_id,status,projects(name)")
@@ -146,7 +144,6 @@ export default function WeeklySchedule() {
       }
     }
 
-    setInviteCode(workspaceResult.data?.invite_code ?? null);
     setLoading(false);
   }, [supabase]);
 
@@ -344,13 +341,22 @@ export default function WeeklySchedule() {
         <div className="legend">{members.map((member) => <span key={member.id}><i className="legend-dot blue" /> {member.display_name}</span>)}</div>
       </header>
 
-      {inviteCode && (
-        <section className="invite-banner panel">
-          <div><strong>Código para convidar</strong><span>{inviteCode}</span></div>
-          <small>A outra pessoa pode informar este código no cadastro para entrar no mesmo workspace.</small>
-        </section>
-      )}
       {error && <div className="error-message page-error">{error}</div>}
+
+      <section className="panel add-schedule-panel">
+        <div className="panel-header"><div><h2>Novo horário</h2><p className="muted">Selecione uma tarefa para criar um vínculo rastreável com o projeto.</p></div></div>
+        <form className="schedule-form enhanced-schedule-form" onSubmit={addBlock}>
+          <label>Atividade<input value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Ex.: Implementar MCTS" /></label>
+          <label>Tarefa vinculada<select value={newLinkedTask} onChange={(event) => selectTaskForNewBlock(event.target.value)}><option value="">Sem tarefa</option>{tasks.map((task) => <option value={task.id} key={task.id}>{task.projects?.name ? `${task.projects.name} · ` : ""}{task.title}{task.status === "done" ? " (concluída)" : ""}</option>)}</select></label>
+          <label>Dia<select value={newDay} onChange={(event) => setNewDay(Number(event.target.value))}>{days.map((day, index) => <option value={index} key={day}>{day}</option>)}</select></label>
+          <label>Início<select value={newStart} onChange={(event) => setNewStart(Number(event.target.value))}>{timeOptions.slice(0, -1).map((item) => <option value={item.minute} key={item.minute}>{item.label}</option>)}</select></label>
+          <label>Fim<select value={newEnd} onChange={(event) => setNewEnd(Number(event.target.value))}>{timeOptions.slice(1).map((item) => <option value={item.minute} key={item.minute}>{item.label}</option>)}</select></label>
+          <label>Responsável<select value={newOwner} onChange={(event) => setNewOwner(event.target.value)}>{members.map((member) => <option value={member.id} key={member.id}>{member.display_name}</option>)}</select></label>
+          <label className="wide-field">Observação<input value={newNotes} onChange={(event) => setNewNotes(event.target.value)} placeholder="Opcional" /></label>
+          <button className="button primary" disabled={saving}>+ Adicionar horário</button>
+        </form>
+      </section>
+
 
       <section className="schedule-panel panel">
         {loading ? <div className="empty-state">Carregando agenda compartilhada...</div> : !workspaceId ? (
@@ -378,20 +384,6 @@ export default function WeeklySchedule() {
             </div>
           </div>
         )}
-      </section>
-
-      <section className="panel add-schedule-panel">
-        <div className="panel-header"><div><h2>Novo horário</h2><p className="muted">Selecione uma tarefa para criar um vínculo rastreável com o projeto.</p></div></div>
-        <form className="schedule-form enhanced-schedule-form" onSubmit={addBlock}>
-          <label>Atividade<input value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Ex.: Implementar MCTS" /></label>
-          <label>Tarefa vinculada<select value={newLinkedTask} onChange={(event) => selectTaskForNewBlock(event.target.value)}><option value="">Sem tarefa</option>{tasks.map((task) => <option value={task.id} key={task.id}>{task.projects?.name ? `${task.projects.name} · ` : ""}{task.title}{task.status === "done" ? " (concluída)" : ""}</option>)}</select></label>
-          <label>Dia<select value={newDay} onChange={(event) => setNewDay(Number(event.target.value))}>{days.map((day, index) => <option value={index} key={day}>{day}</option>)}</select></label>
-          <label>Início<select value={newStart} onChange={(event) => setNewStart(Number(event.target.value))}>{timeOptions.slice(0, -1).map((item) => <option value={item.minute} key={item.minute}>{item.label}</option>)}</select></label>
-          <label>Fim<select value={newEnd} onChange={(event) => setNewEnd(Number(event.target.value))}>{timeOptions.slice(1).map((item) => <option value={item.minute} key={item.minute}>{item.label}</option>)}</select></label>
-          <label>Responsável<select value={newOwner} onChange={(event) => setNewOwner(event.target.value)}>{members.map((member) => <option value={member.id} key={member.id}>{member.display_name}</option>)}</select></label>
-          <label className="wide-field">Observação<input value={newNotes} onChange={(event) => setNewNotes(event.target.value)} placeholder="Opcional" /></label>
-          <button className="button primary" disabled={saving}>+ Adicionar horário</button>
-        </form>
       </section>
 
       {selected && (

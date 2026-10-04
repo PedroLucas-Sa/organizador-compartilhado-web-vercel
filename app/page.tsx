@@ -17,6 +17,7 @@ export default function Home() {
   const supabase = useMemo(() => createClient(), []);
   const [displayName, setDisplayName] = useState("Usuário");
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [tasks, setTasks] = useState<ProjectTask[]>([]);
   const [helpRequests, setHelpRequests] = useState<HelpRequest[]>([]);
@@ -53,7 +54,7 @@ export default function Home() {
         return;
       }
 
-      const [profileResult, projectsResult, tasksResult, helpResult] = await Promise.all([
+      const [profileResult, projectsResult, tasksResult, helpResult, workspaceResult] = await Promise.all([
         supabase.from("profiles").select("display_name").eq("id", authData.user.id).maybeSingle(),
         supabase
           .from("projects")
@@ -71,6 +72,7 @@ export default function Home() {
           .eq("workspace_id", targetWorkspace)
           .neq("status", "resolved")
           .order("updated_at", { ascending: false }),
+        supabase.from("workspaces").select("invite_code").eq("id", targetWorkspace).maybeSingle(),
       ]);
 
       if (!mounted) return;
@@ -80,6 +82,7 @@ export default function Home() {
       if (tasksResult.error) setError(`Erro ao carregar tarefas: ${tasksResult.error.message}`);
       else setTasks((tasksResult.data ?? []) as ProjectTask[]);
       if (!helpResult.error) setHelpRequests((helpResult.data ?? []) as HelpRequest[]);
+      if (!workspaceResult.error) setInviteCode(workspaceResult.data?.invite_code ?? null);
       setLoading(false);
     }
 
@@ -183,6 +186,13 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {inviteCode && (
+        <section className="invite-banner panel">
+          <div><strong>Código para convidar</strong><span>{inviteCode}</span></div>
+          <small>A outra pessoa pode informar este código no cadastro para entrar no mesmo workspace.</small>
+        </section>
+      )}
     </AppShell>
   );
 }
