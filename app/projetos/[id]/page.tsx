@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import IconPicker from "@/components/IconPicker";
 import { createClient } from "@/lib/supabase/client";
-import { formatDate, priorityLabel, projectIcon, projectProgress, statusLabel, type ProjectTask, type TaskPriority, type TaskStatus } from "@/lib/project";
+import { formatDate, priorityLabel, projectIcon, projectProgress, sortProjectTasks, statusLabel, type ProjectTask, type TaskPriority, type TaskStatus } from "@/lib/project";
 
 type Project = {
   id: string;
@@ -283,6 +283,7 @@ export default function ProjectDetailPage() {
 
   const memberName = (id: string | null) => members.find((member) => member.id === id)?.display_name ?? "Sem responsável";
   const progress = projectProgress(tasks);
+  const sortedTasks = useMemo(() => sortProjectTasks(tasks), [tasks]);
   const doneCount = tasks.filter((task) => task.status === "done").length;
   const inProgressCount = tasks.filter((task) => task.status === "in_progress").length;
 
@@ -331,10 +332,10 @@ export default function ProjectDetailPage() {
       <div className="project-detail-grid">
         <div className="project-main-column">
           <section className="panel">
-            <div className="panel-header"><div><h2>Tarefas</h2><p className="muted">Status, responsável, prioridade e prazo podem ser alterados diretamente.</p></div></div>
+            <div className="panel-header"><div><h2>Tarefas</h2><p className="muted">Ordenadas por atraso, prazo, prioridade e andamento. Status e demais campos podem ser alterados diretamente.</p></div></div>
             {tasks.length ? (
               <div className="project-task-list">
-                {tasks.map((task) => (
+                {sortedTasks.map((task) => (
                   <article className={`project-task-card ${task.status === "done" ? "is-done" : ""}`} key={task.id}>
                     <div className="task-card-heading">
                       <div>

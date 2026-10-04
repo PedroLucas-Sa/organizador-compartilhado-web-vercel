@@ -233,6 +233,8 @@ textarea { font: inherit; }
 .status-pill.pending { background: #f2f4f7; color: #667085; }
 .status-pill.in_progress { background: #fff4df; color: #9a6700; }
 .status-pill.done { background: #eaf8ef; color: #18794e; }
+.status-pill.overdue { background: #fff0f0; color: #b42318; }
+.task-status-stack { display: grid; gap: 5px; flex: 0 0 auto; }
 .icon-button { width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-size: 20px; line-height: 1; }
 .danger-text { color: var(--danger); }
 .task-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
