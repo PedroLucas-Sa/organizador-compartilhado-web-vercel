@@ -31,8 +31,16 @@ create table if not exists public.projects (
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
   name text not null,
   description text,
+  icon text not null default '📁',
   created_at timestamptz not null default now()
 );
+
+
+-- Compatibilidade para bancos criados antes do campo icon.
+alter table public.projects add column if not exists icon text;
+update public.projects set icon = '📁' where icon is null or trim(icon) = '';
+alter table public.projects alter column icon set default '📁';
+alter table public.projects alter column icon set not null;
 
 create table if not exists public.tasks (
   id uuid primary key default gen_random_uuid(),
@@ -576,6 +584,7 @@ declare
   project_id uuid;
   project_name text;
   project_description text;
+  project_icon text;
   project_tasks jsonb;
   task_data jsonb;
   task_title text;
@@ -637,6 +646,21 @@ begin
   end if;
 
   project_description := nullif(trim(coalesce(p_payload #>> '{project,description}', '')), '');
+
+  if p_payload #> '{project,icon}' is not null
+     and p_payload #> '{project,icon}' <> 'null'::jsonb
+     and jsonb_typeof(p_payload #> '{project,icon}') <> 'string' then
+    raise exception 'O ícone do projeto precisa ser texto';
+  end if;
+
+  project_icon := nullif(trim(coalesce(p_payload #>> '{project,icon}', '')), '');
+  if project_icon is null then
+    project_icon := '📁';
+  end if;
+  if char_length(project_icon) > 32 then
+    raise exception 'O ícone do projeto é inválido';
+  end if;
+
   project_tasks := coalesce(p_payload #> '{project,tasks}', '[]'::jsonb);
 
   if jsonb_typeof(project_tasks) is distinct from 'array' then
@@ -656,8 +680,8 @@ begin
     raise exception 'Já existe um projeto chamado "%" neste workspace', project_name;
   end if;
 
-  insert into public.projects (workspace_id, name, description)
-  values (target_workspace, project_name, project_description)
+  insert into public.projects (workspace_id, name, description, icon)
+  values (target_workspace, project_name, project_description, project_icon)
   returning id into project_id;
 
   for task_data in

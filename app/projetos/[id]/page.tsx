@@ -4,14 +4,16 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
+import IconPicker from "@/components/IconPicker";
 import { createClient } from "@/lib/supabase/client";
-import { formatDate, priorityLabel, projectProgress, statusLabel, type ProjectTask, type TaskPriority, type TaskStatus } from "@/lib/project";
+import { formatDate, priorityLabel, projectIcon, projectProgress, statusLabel, type ProjectTask, type TaskPriority, type TaskStatus } from "@/lib/project";
 
 type Project = {
   id: string;
   workspace_id: string;
   name: string;
   description: string | null;
+  icon: string | null;
   created_at: string;
 };
 
@@ -61,6 +63,7 @@ export default function ProjectDetailPage() {
   const [notice, setNotice] = useState("");
 
   const [editName, setEditName] = useState("");
+  const [editIcon, setEditIcon] = useState("📁");
   const [editDescription, setEditDescription] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
@@ -76,7 +79,7 @@ export default function ProjectDetailPage() {
     if (!supabase || !projectId) return;
 
     const [projectResult, tasksResult, membersResult, scheduleResult] = await Promise.all([
-      supabase.from("projects").select("id,workspace_id,name,description,created_at").eq("id", projectId).eq("workspace_id", workspace).maybeSingle(),
+      supabase.from("projects").select("id,workspace_id,name,description,icon,created_at").eq("id", projectId).eq("workspace_id", workspace).maybeSingle(),
       supabase
         .from("tasks")
         .select("id,project_id,title,description,priority,status,due_date,assigned_to,created_by,created_at,updated_at")
@@ -99,6 +102,7 @@ export default function ProjectDetailPage() {
       setProject(nextProject);
       if (nextProject) {
         setEditName(nextProject.name);
+        setEditIcon(projectIcon(nextProject.name, nextProject.icon));
         setEditDescription(nextProject.description ?? "");
       }
     }
@@ -175,7 +179,7 @@ export default function ProjectDetailPage() {
     setError("");
     const { error: updateError } = await supabase
       .from("projects")
-      .update({ name: editName.trim(), description: editDescription.trim() || null })
+      .update({ name: editName.trim(), icon: editIcon, description: editDescription.trim() || null })
       .eq("id", project.id);
     setSaving(false);
     if (updateError) setError(`Não foi possível salvar o projeto: ${updateError.message}`);
@@ -298,10 +302,13 @@ export default function ProjectDetailPage() {
     <AppShell active="projects" footerLabel={`${tasks.length} tarefa(s)`}>
       <div className="breadcrumbs"><Link href="/projetos">Projetos</Link><span>/</span><strong>{project.name}</strong></div>
       <header className="project-detail-header">
-        <div>
-          <p className="eyebrow">PROJETO</p>
-          <h1>{project.name}</h1>
-          <p className="muted project-description">{project.description || "Sem descrição."}</p>
+        <div className="project-title-block">
+          <span className="project-title-icon" aria-hidden="true">{projectIcon(project.name, project.icon)}</span>
+          <div>
+            <p className="eyebrow">PROJETO</p>
+            <h1>{project.name}</h1>
+            <p className="muted project-description">{project.description || "Sem descrição."}</p>
+          </div>
         </div>
         <div className="project-progress-card">
           <div className="project-progress-number">{progress}%</div>
@@ -397,6 +404,7 @@ export default function ProjectDetailPage() {
           <section className="panel project-settings-panel">
             <div className="panel-header"><h2>Detalhes do projeto</h2></div>
             <form className="project-settings-form" onSubmit={saveProject}>
+              <IconPicker value={editIcon} onChange={setEditIcon} disabled={saving} />
               <label>Nome<input value={editName} onChange={(event) => setEditName(event.target.value)} /></label>
               <label>Descrição<textarea rows={7} value={editDescription} onChange={(event) => setEditDescription(event.target.value)} /></label>
               <button className="button secondary" disabled={saving}>{saving ? "Salvando..." : "Salvar detalhes"}</button>

@@ -57,7 +57,7 @@ export default function Home() {
         supabase.from("profiles").select("display_name").eq("id", authData.user.id).maybeSingle(),
         supabase
           .from("projects")
-          .select("id,workspace_id,name,description,created_at,tasks(id,status,due_date,priority,title)")
+          .select("id,workspace_id,name,description,icon,created_at,tasks(id,status,due_date,priority,title)")
           .eq("workspace_id", targetWorkspace)
           .order("created_at", { ascending: false }),
         supabase
@@ -168,7 +168,7 @@ export default function Home() {
               const done = (project.tasks ?? []).filter((task) => task.status === "done").length;
               return (
                 <Link className="project-card project-card-link" href={`/projetos/${project.id}`} key={project.id}>
-                  <div className="project-title"><span>{projectIcon(project.name)}</span><strong>{project.name}</strong></div>
+                  <div className="project-title"><span>{projectIcon(project.name, project.icon)}</span><strong>{project.name}</strong></div>
                   <div className="progress-track"><div className="progress-fill" style={{ width: `${progress}%` }} /></div>
                   <div className="project-meta"><span>{progress}% concluído</span><span>{done}/{project.tasks?.length ?? 0} tarefas</span></div>
                 </Link>

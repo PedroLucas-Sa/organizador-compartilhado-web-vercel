@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/AppShell";
+import IconPicker from "@/components/IconPicker";
 import { createClient } from "@/lib/supabase/client";
+import { DEFAULT_PROJECT_ICON } from "@/data/project-icons";
 import { projectIcon, projectProgress, type ProjectSummary } from "@/lib/project";
 
 type ImportPriority = "low" | "medium" | "high";
@@ -22,6 +24,7 @@ type OrganizerProjectFile = {
   version: 1;
   project: {
     name: string;
+    icon: string;
     description?: string | null;
     tasks: ImportTask[];
   };
@@ -59,6 +62,15 @@ function parseOrganizerProjectFile(raw: unknown): OrganizerProjectFile {
   const projectName = typeof raw.project.name === "string" ? raw.project.name.trim() : "";
   if (!projectName) throw new Error("O projeto precisa ter um nome.");
   if (projectName.length > 200) throw new Error("O nome do projeto é muito longo.");
+
+  const projectIconValue = raw.project.icon;
+  if (projectIconValue != null && typeof projectIconValue !== "string") {
+    throw new Error("O ícone do projeto precisa ser texto.");
+  }
+  const projectIcon = typeof projectIconValue === "string" && projectIconValue.trim()
+    ? projectIconValue.trim()
+    : DEFAULT_PROJECT_ICON;
+  if (projectIcon.length > 32) throw new Error("O ícone do projeto é inválido.");
 
   const projectDescription = raw.project.description;
   if (projectDescription != null && typeof projectDescription !== "string") {
@@ -111,6 +123,7 @@ function parseOrganizerProjectFile(raw: unknown): OrganizerProjectFile {
     version: 1,
     project: {
       name: projectName,
+      icon: projectIcon,
       description: typeof projectDescription === "string" ? projectDescription.trim() || null : null,
       tasks,
     },
@@ -123,6 +136,7 @@ export default function ProjectsPage() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [name, setName] = useState("");
+  const [icon, setIcon] = useState(DEFAULT_PROJECT_ICON);
   const [description, setDescription] = useState("");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -138,7 +152,7 @@ export default function ProjectsPage() {
 
     const { data, error: projectsError } = await supabase
       .from("projects")
-      .select("id,workspace_id,name,description,created_at,tasks(id,status,due_date,priority,title)")
+      .select("id,workspace_id,name,description,icon,created_at,tasks(id,status,due_date,priority,title)")
       .eq("workspace_id", workspace)
       .order("created_at", { ascending: false });
 
@@ -197,6 +211,7 @@ export default function ProjectsPage() {
     const { error: insertError } = await supabase.from("projects").insert({
       workspace_id: workspaceId,
       name: name.trim(),
+      icon,
       description: description.trim() || null,
     });
 
@@ -206,6 +221,7 @@ export default function ProjectsPage() {
       return;
     }
     setName("");
+    setIcon(DEFAULT_PROJECT_ICON);
     setDescription("");
     setNotice("Projeto criado.");
     await loadProjects(workspaceId);
@@ -301,9 +317,10 @@ export default function ProjectsPage() {
       <section className="panel project-create-panel">
         <div className="panel-header"><div><h2>Novo projeto</h2><p className="muted">Crie a área de trabalho e adicione tarefas na página do projeto.</p></div></div>
         <form className="project-form" onSubmit={createProject}>
+          <IconPicker value={icon} onChange={setIcon} disabled={saving} />
           <label>Nome<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Mini KataGo" required /></label>
-          <label className="wide-field">Descrição<textarea rows={3} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Objetivo, contexto e critérios principais do projeto." /></label>
           <button className="button primary" disabled={saving || !workspaceId}>{saving ? "Criando..." : "+ Criar projeto"}</button>
+          <label className="wide-field">Descrição<textarea rows={3} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Objetivo, contexto e critérios principais do projeto." /></label>
         </form>
       </section>
 
@@ -329,7 +346,7 @@ export default function ProjectsPage() {
             return (
               <Link className="project-catalog-card" href={`/projetos/${project.id}`} key={project.id}>
                 <div className="project-catalog-heading">
-                  <span className="project-icon">{projectIcon(project.name)}</span>
+                  <span className="project-icon">{projectIcon(project.name, project.icon)}</span>
                   <div><strong>{project.name}</strong><small>{project.description || "Sem descrição."}</small></div>
                 </div>
                 <div className="progress-track"><div className="progress-fill" style={{ width: `${progress}%` }} /></div>
@@ -360,7 +377,7 @@ export default function ProjectsPage() {
             <div className="panel-header">
               <div>
                 <p className="eyebrow">IMPORTAR PROJETO</p>
-                <h2>{importPreview.project.name}</h2>
+                <h2><span className="import-project-icon">{importPreview.project.icon}</span>{importPreview.project.name}</h2>
                 <p className="muted">{importFileName || "Arquivo de projeto"}</p>
               </div>
             </div>
