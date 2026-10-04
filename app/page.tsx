@@ -150,13 +150,13 @@ export default function Home() {
         </section>
 
         <section className="panel">
-          <div className="panel-header"><h2>Colaboração</h2><span className="badge-neutral">{helpRequests.length} abertos</span></div>
+          <div className="panel-header"><h2>Colaboração</h2><Link href="/colaboracao" className="text-link">Abrir área →</Link></div>
           {helpRequests.length ? helpRequests.slice(0, 3).map((request) => (
-            <div className="help-card warning-soft" key={request.id}>
+            <Link className="help-card warning-soft help-card-link" href="/colaboracao" key={request.id}>
               <b>{request.type === "review" ? "Revisão" : request.type === "planning" ? "Planejamento" : "Pedido de ajuda"}</b>
               <span>{request.title}</span>
-            </div>
-          )) : <div className="compact-empty">Nenhum pedido de ajuda ou revisão em aberto.</div>}
+            </Link>
+          )) : <div className="compact-empty"><span>Nenhum pedido de ajuda ou revisão em aberto.</span><Link href="/colaboracao" className="button secondary">Abrir colaboração</Link></div>}
         </section>
       </div>
 

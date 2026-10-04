@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-type Active = "home" | "tasks" | "projects" | "schedule";
+type Active = "home" | "tasks" | "projects" | "schedule" | "collaboration";
 
 type Props = {
   active: Active;
@@ -14,6 +14,7 @@ const nav = [
   { key: "tasks", href: "/tarefas", icon: "📋", label: "Tarefas" },
   { key: "projects", href: "/projetos", icon: "📁", label: "Projetos" },
   { key: "schedule", href: "/horario", icon: "🕐", label: "Horário semanal" },
+  { key: "collaboration", href: "/colaboracao", icon: "🤝", label: "Colaboração" },
 ] as const;
 
 export default function AppShell({ active, children, footerLabel = "Espaço compartilhado" }: Props) {

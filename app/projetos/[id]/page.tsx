@@ -362,7 +362,10 @@ export default function ProjectDetailPage() {
                     </div>
                     <div className="task-card-footer">
                       <span><b>{priorityLabel[task.priority]}</b> prioridade · {memberName(task.assigned_to)} · {formatDate(task.due_date)}</span>
-                      <Link className="text-link" href={`/horario?task=${task.id}`}>Agendar tarefa →</Link>
+                      <div className="task-card-footer-actions">
+                        <Link className="text-link" href={`/colaboracao?task=${task.id}`}>Colaborar →</Link>
+                        <Link className="text-link" href={`/horario?task=${task.id}`}>Agendar tarefa →</Link>
+                      </div>
                     </div>
                   </article>
                 ))}
